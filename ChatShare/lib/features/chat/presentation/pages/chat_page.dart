@@ -177,15 +177,17 @@ class _ChatPageState extends State<ChatPage> {
                     if (state is ChatLoadingState) {
                       return Center(child: CircularProgressIndicator());
                     } else if (state is ChatLoadedState) {
-                      // ✅ Ensure scrolling happens after messages are set
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        _scrollToBottom();
-                      });
+                      // ✅ Ensure scrolling happens AFTER the widget tree rebuilds completely
+                      Future.microtask(() => _scrollToBottom());
+
                       return ListView.builder(
                         controller:
-                            _scrollController, // ✅ Attach ScrollController here
+                            _scrollController, // ✅ Attach ScrollController
                         padding: EdgeInsets.all(20),
-                        itemCount: state.messages.length,
+                        itemCount: state.messages.length.clamp(
+                          0,
+                          100,
+                        ), // ✅ Prevent UI freeze
                         itemBuilder: (context, index) {
                           final message = state.messages[index];
                           final isSentMessage = message.senderId == userId;
@@ -376,7 +378,7 @@ class _ChatPageState extends State<ChatPage> {
         color: Colors.blue,
       ); // Blue tick remains blue
     } else {
-      tickIcon = Icon(Icons.access_time, color: tickColor); // Pending
+      tickIcon = Icon(Icons.check, color: tickColor); // Pending
     }
 
     return Align(
