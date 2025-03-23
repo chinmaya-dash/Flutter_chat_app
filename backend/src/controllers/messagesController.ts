@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import pool from "../models/db";
 
+
 export const fetchAllMessagesByConversationId = async (req: Request, res: Response) => {
     const { conversationId } = req.params;
 
@@ -21,20 +22,33 @@ export const fetchAllMessagesByConversationId = async (req: Request, res: Respon
     }
 }
 
-export const saveMessage = async (conversationId: string, senderId: string, content: string) => {
-    try{
+export const saveMessage = async (conversationId: string, senderId: string, content: string, status: string) => {
+    try {
         const result = await pool.query(
             `
-            INSERT INTO messages (conversation_id, sender_id, content)
-            Values ($1,$2,$3)
-            Returning *;
+            INSERT INTO messages (conversation_id, sender_id, content, status)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *;
             `,
-            [conversationId, senderId, content]
+            [conversationId, senderId, content, status] // ✅ Include status parameter
         );
 
         return result.rows[0];
-    } catch(err){
-        console.error('Error saving message : ', err);
-        throw new Error('Failed to save message');
+    } catch (err) {
+        console.error("Error saving message:", err);
+        throw new Error("Failed to save message");
+    }
+};
+
+export async function updateMessageStatus(messageId: string, status: string): Promise<void> {
+    try {
+        await pool.query(
+            `UPDATE messages SET status = $1 WHERE id = $2`,
+            [status, messageId]
+        );
+        console.log(`Message ${messageId} status updated to ${status}`);
+    } catch (error) {
+        console.error("Error updating message status:", error);
+        throw error;
     }
 }

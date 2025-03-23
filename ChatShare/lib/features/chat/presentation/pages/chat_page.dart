@@ -12,6 +12,9 @@ import 'package:chatshare/features/chat/presentation/bloc/chat_bloc.dart';
 import 'package:chatshare/features/chat/presentation/bloc/chat_event.dart';
 import 'package:chatshare/features/chat/presentation/bloc/chat_state.dart';
 
+// scrool to bottum
+final ScrollController _scrollController = ScrollController();
+
 class ChatPage extends StatefulWidget {
   final String conversationId;
   final String mate;
@@ -107,6 +110,9 @@ class _ChatPageState extends State<ChatPage> {
       setState(
         () => _showEmojiPicker = false,
       ); // Hide emoji picker after sending
+      Future.delayed(Duration(milliseconds: 100), () {
+        _scrollToBottom();
+      });
     }
   }
 
@@ -125,6 +131,17 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       _showEmojiPicker = !_showEmojiPicker;
     });
+  }
+
+  // scroll
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override
@@ -160,7 +177,13 @@ class _ChatPageState extends State<ChatPage> {
                     if (state is ChatLoadingState) {
                       return Center(child: CircularProgressIndicator());
                     } else if (state is ChatLoadedState) {
+                      // ✅ Ensure scrolling happens after messages are set
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _scrollToBottom();
+                      });
                       return ListView.builder(
+                        controller:
+                            _scrollController, // ✅ Attach ScrollController here
                         padding: EdgeInsets.all(20),
                         itemCount: state.messages.length,
                         itemBuilder: (context, index) {
@@ -233,7 +256,7 @@ class _ChatPageState extends State<ChatPage> {
                 try {
                   final response = await http.get(
                     Uri.parse(
-                      'http://192.168.33.126:4000/conversations/${widget.conversationId}/daily-question',
+                      'http://192.168.222.126:4000/conversations/${widget.conversationId}/daily-question',
                     ),
                   );
 
@@ -350,10 +373,10 @@ class _ChatPageState extends State<ChatPage> {
     } else if (status == 'read') {
       tickIcon = Icon(
         Icons.done_all,
-        color: const Color.fromARGB(255, 0, 0, 0),
+        color: Colors.blue,
       ); // Blue tick remains blue
     } else {
-      tickIcon = Icon(Icons.access_time, color: AppTheme.darkTheme.scaffoldBackgroundColor); // Pending
+      tickIcon = Icon(Icons.access_time, color: tickColor); // Pending
     }
 
     return Align(
@@ -366,7 +389,7 @@ class _ChatPageState extends State<ChatPage> {
           borderRadius: BorderRadius.circular(15),
         ),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
+          maxWidth: MediaQuery.of(context).size.width,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

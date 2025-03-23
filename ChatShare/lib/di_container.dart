@@ -24,7 +24,7 @@ import 'package:chatshare/features/conversation/domain/usecases/fetch_conversati
 final GetIt sl = GetIt.instance;
 
 void setupDependencies() {
-  String serverUrl = 'http://192.168.33.126:4000'; // Default URL
+  String serverUrl = 'http://192.168.222.126:4000'; // Default URL
   // if (serverUrl.isEmpty) {
   //   serverUrl = 'http://192.168.189.126:4000'; // Fallback
   // }

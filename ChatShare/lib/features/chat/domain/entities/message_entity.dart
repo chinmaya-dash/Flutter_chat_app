@@ -5,7 +5,7 @@ class MessageEntity {
   final String content;
   final String createdAt;
   final bool isImage; // ✅ Add this field
-  final String status; // ✅ Add status field
+  String status; // ✅ Add status field
 
   MessageEntity({
     required this.id,
