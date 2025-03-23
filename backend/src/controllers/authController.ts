@@ -20,13 +20,13 @@ export const register = async(req: Request, res: Response) => {
     try {
         // const { username, email, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-        const randomImage: string = randomImages[Math.floor(Math.random() * randomImages.length)];        // Insert user into DB
+        // const randomImage: string = randomImages[Math.floor(Math.random() * randomImages.length)];        // Insert user into DB
         // console.log(username,email,password);
         const result = await pool.query(
-            `INSERT INTO users (username, email, password, profile_image) 
-             VALUES ($1, $2, $3, $4) 
+            `INSERT INTO users (username, email, password) 
+             VALUES ($1, $2, $3) 
              RETURNING *;`,
-            [username, email, hashedPassword, randomImages]
+            [username, email, hashedPassword]
         );
         // console.log(result);
         

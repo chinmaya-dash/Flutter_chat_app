@@ -6,14 +6,28 @@ import authRoutes from './routes/authRoutes';
 import conversationsRoutes from './routes/conversationsRoutes';
 import messagesRoutes from './routes/messagesRoutes';
 import contactsRoutes from './routes/contactsRoutes';
-import profileRoutes from './routes/profileRoutes';
+// import profileRoutes from './routes/profileRoutes';
 import { error } from 'console';
 import { saveMessage } from './controllers/messagesController';
+import dotenv from 'dotenv';
 import './cron/cronJob';
+dotenv.config();
 // import { getUserDetails,updateProfile } from './controllers/profileController';
 
 import chatRoutes from './routes/chatRoutes';
 
+// importfirebase
+// import admin from "firebase-admin";
+// import serviceAccount from "./firebaseConfig.json";
+
+
+// admin.initializeApp({
+//     credential: admin.credential.cert(serviceAccount),
+//     storageBucket: "rtchatshareapp.appspot.com", // Replace with your Firebase bucket name
+//   });
+  
+//   const bucket = admin.storage().bucket();
+//   export { bucket };
 
 const app = express();
 const server = http.createServer(app);
@@ -28,7 +42,7 @@ app.use('/auth', authRoutes);
 app.use('/conversations', conversationsRoutes);
 app.use('/messages', messagesRoutes);
 app.use('/contacts', contactsRoutes);
-app.use('/profile',profileRoutes)
+// app.use('/profile',profileRoutes)
 
 app.use('/api', chatRoutes); 
 

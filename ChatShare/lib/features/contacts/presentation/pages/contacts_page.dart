@@ -5,6 +5,7 @@ import 'package:chatshare/features/chat/presentation/pages/chat_page.dart';
 import 'package:chatshare/features/contacts/presentation/bloc/contacts_bloc.dart';
 import 'package:chatshare/features/contacts/presentation/bloc/contacts_event.dart';
 import 'package:chatshare/features/contacts/presentation/bloc/contacts_state.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ContactsPage extends StatefulWidget {
   const ContactsPage({super.key});
@@ -37,6 +38,10 @@ class _ContactsPageState extends State<ContactsPage> {
           final contactsBloc = BlocProvider.of<ContactsBloc>(context);
 
           if (state is ConversationReady) {
+            // fetch userid
+            final storage = FlutterSecureStorage();
+            String? userId = await storage.read(key: 'userId') ?? ''; // ✅ Fetch user ID
+
             var res = await Navigator.push(
               context,
               MaterialPageRoute(
@@ -45,6 +50,7 @@ class _ContactsPageState extends State<ContactsPage> {
                       conversationId: state.conversationId,
                       mate: state.contact.username,
                       profileImage: state.contact.profileImage,
+                      currentUserId: userId, // ✅ Pass currentUserId
                     ),
               ),
             );

@@ -160,20 +160,33 @@ class _ConversationsPageState extends State<ConversationsPage> {
                           'conversation.participantImage : ${conversation.participantImage}',
                         );
                         return GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (context) => ChatPage(
-                                      conversationId: conversation.id,
-                                      mate: conversation.participantName,
-                                      profileImage:
-                                          conversation.participantImage,
-                                    ),
-                              ),
-                            );
+                          onTap: () async {
+                            final storage = FlutterSecureStorage();
+                            String? userId =
+                                await storage.read(key: 'userId') ??
+                                ''; // ✅ Ensure `userId` is fetched first
+
+                            if (userId.isNotEmpty) {
+                              // ✅ Ensure userId is available
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder:
+                                      (context) => ChatPage(
+                                        conversationId: conversation.id,
+                                        mate: conversation.participantName,
+                                        profileImage:
+                                            conversation.participantImage,
+                                        currentUserId:
+                                            userId, // ✅ Pass `currentUserId`
+                                      ),
+                                ),
+                              );
+                            } else {
+                              print("User ID not found!");
+                            }
                           },
+
                           child: _buildMessageTile(
                             conversation.participantName,
                             conversation.participantImage,

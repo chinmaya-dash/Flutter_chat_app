@@ -8,6 +8,7 @@ class MessageModel extends MessageEntity {
     required super.content,
     required super.createdAt, // ✅ Ensure correct type (String)
     required super.isImage, // ✅ Ensure it’s passed correctly
+    required super.status, // ✅ New Field for Message Status
   }); // ✅ Explicitly pass to super
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
@@ -18,6 +19,7 @@ class MessageModel extends MessageEntity {
       content: json['content'],
       createdAt: json['created_at'], // ✅ Keep it as String
       isImage: json['is_image'] ?? false, // ✅ Ensure correct key naming
+      status: json['status'] ?? 'sent', // ✅ Default to 'sent' if missing
     );
   }
 }

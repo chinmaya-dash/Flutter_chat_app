@@ -65,9 +65,28 @@ Future<void> _onLoadMessages(LoadMessagesEvent event, Emitter<ChatState> emit) a
     _socketService.socket.emit('sendMessage', newMessage);
   }
 
-  Future<void> _onReceiveMessage(ReceiveMessageEvent event, Emitter<ChatState> emit) async {
-  print("New message event received");
-  print(event.message);
+//   Future<void> _onReceiveMessage(ReceiveMessageEvent event, Emitter<ChatState> emit) async {
+//   print("New message event received");
+//   print(event.message);
+
+//   final newMessage = MessageEntity(
+//     id: event.message['id'],
+//     conversationId: event.message['conversation_id'],
+//     senderId: event.message['sender_id'],
+//     content: event.message['content'],
+//     createdAt: event.message['created_at'],
+//     isImage: event.message['is_image'] ?? false,
+//     status: event.message['status'] ?? 'sent',  // ✅ Add status, defaulting to 'sent'
+//   );
+
+//   if (!_messages.any((msg) => msg.id == newMessage.id)) {  // ✅ Prevent duplicates
+//     _messages.add(newMessage);
+//     emit(ChatLoadedState(List.from(_messages))); // ✅ Update UI
+//   }
+// }
+
+Future<void> _onReceiveMessage(ReceiveMessageEvent event, Emitter<ChatState> emit) async {
+  print("New message event received: ${event.message}");
 
   final newMessage = MessageEntity(
     id: event.message['id'],
@@ -76,26 +95,67 @@ Future<void> _onLoadMessages(LoadMessagesEvent event, Emitter<ChatState> emit) a
     content: event.message['content'],
     createdAt: event.message['created_at'],
     isImage: event.message['is_image'] ?? false,
+    status: event.message['status'] ?? 'sent',
   );
 
-  if (!_messages.any((msg) => msg.id == newMessage.id)) {  // ✅ Prevent duplicates
+  if (!_messages.any((msg) => msg.id == newMessage.id)) {
     _messages.add(newMessage);
-    emit(ChatLoadedState(List.from(_messages))); // ✅ Update UI
+    emit(ChatLoadedState(List.from(_messages)));
+
+    // ✅ Mark message as read if it's from someone else
+    if (newMessage.senderId != await _storage.read(key: 'userId')) {
+      await markMessagesAsRead(newMessage.conversationId, newMessage.id);
+    }
   }
 }
 
+Future<void> markMessagesAsRead(String conversationId, String messageId) async {
+  final url = Uri.parse('http://192.168.33.126:4000/conversations/messages/mark-as-read');
+  
+  final response = await http.post(
+    url,
+    headers: {"Content-Type": "application/json"},
+    body: jsonEncode({"conversationId": conversationId, "messageId": messageId}),
+  );
+
+  if (response.statusCode == 200) {
+    print("Message marked as read: $messageId");
+  } else {
+    print("Failed to update message status");
+  }
+}
+
+
 Future<void> _onLoadDailyQuestionEvent(LoadDailyQuestionEvent event, Emitter<ChatState> emit) async {
   try {
-    final response = await http.get(Uri.parse('http://192.168.33.126:4000/api/conversations/${event.conversationId}/daily-question'));
+    final response = await http.get(
+      Uri.parse('http://192.168.33.126:4000/api/conversations/${event.conversationId}/daily-question'),
+    );
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final dailyQuestion = DailyQuestionEntity(content: data['question']);
       
-      final currentMessages = state is ChatLoadedState ? (state as ChatLoadedState).messages : _messages;
+      // ✅ Ensure no duplicate AI message is added
+      final chatState = state is ChatLoadedState ? state as ChatLoadedState : ChatLoadedState([]);
+      if (chatState.messages.any((msg) => msg.content == dailyQuestion.content)) {
+        print("Duplicate AI message detected, skipping...");
+        return;
+      }
 
-      emit(ChatDailyQuestionLoadedState(dailyQuestion));
-      emit(ChatLoadedState(List.from(currentMessages))); // ✅ Preserve existing messages
+      // ✅ Preserve previous messages while adding the AI question
+      final updatedMessages = List<MessageEntity>.from(chatState.messages)
+        ..add(MessageEntity(
+          id: "ai_${DateTime.now().millisecondsSinceEpoch}",
+          conversationId: event.conversationId,
+          senderId: "bot",
+          content: dailyQuestion.content,
+          createdAt: DateTime.now().toIso8601String(),
+          isImage: false,
+          status: 'delivered', // ✅ Default AI messages as delivered
+        ));
+
+      emit(ChatLoadedState(updatedMessages));  
     } else {
       emit(ChatErrorState('Failed to fetch AI message'));
     }
@@ -103,6 +163,7 @@ Future<void> _onLoadDailyQuestionEvent(LoadDailyQuestionEvent event, Emitter<Cha
     emit(ChatErrorState('Error loading AI message'));
   }
 }
+
 
 
 }

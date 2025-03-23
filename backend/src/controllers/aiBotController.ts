@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../models/db';
 import { generateDailyQuestion } from '../services/openaiService';
-import { AI_BOT_ID } from '../config';
+// import { AI_BOT_ID } from '../config';
 
 export const sendAIBotMessage = async (req: Request, res: Response) => {
     const conversationId = req.params.id;
@@ -11,7 +11,7 @@ export const sendAIBotMessage = async (req: Request, res: Response) => {
 
         await pool.query(
             `INSERT INTO messages (conversation_id, sender_id, content) VALUES ($1, $2, $3)`,
-            [conversationId, AI_BOT_ID, question]
+            [conversationId, process.env.AI_BOT_ID, question]
         );
 
         res.json({ content: question });

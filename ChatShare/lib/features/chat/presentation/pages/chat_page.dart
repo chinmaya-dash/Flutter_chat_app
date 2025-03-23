@@ -16,12 +16,14 @@ class ChatPage extends StatefulWidget {
   final String conversationId;
   final String mate;
   final String profileImage;
+  final String currentUserId; // ✅ Add this
 
   const ChatPage({
     super.key,
     required this.conversationId,
     required this.mate,
     required this.profileImage,
+    required this.currentUserId, // ✅ Add this
   });
 
   @override
@@ -45,6 +47,7 @@ class _ChatPageState extends State<ChatPage> {
     ).add(LoadMessagesEvent(widget.conversationId));
     // BlocProvider.of<ChatBloc>(context,).add(LoadDailyQuestionEvent(widget.conversationId));
     fetchUserId();
+    markMessagesAsRead(widget.conversationId, widget.currentUserId);
   }
 
   fetchUserId() async {
@@ -65,6 +68,25 @@ class _ChatPageState extends State<ChatPage> {
       BlocProvider.of<ChatBloc>(context).add(
         SendMessageEvent(widget.conversationId, pickedFile.path, isImage: true),
       );
+    }
+  }
+
+  //message seen
+  Future<void> markMessagesAsRead(String conversationId, String userId) async {
+    final url = Uri.parse(
+      'http://localhost:4000/conversations/messages/mark-as-read',
+    );
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"conversationId": conversationId, "userId": userId}),
+    );
+
+    if (response.statusCode == 200) {
+      print("Messages marked as read");
+    } else {
+      print("Failed to update message status");
     }
   }
 
@@ -151,6 +173,7 @@ class _ChatPageState extends State<ChatPage> {
                               context,
                               message.content,
                               message.isImage,
+                              message.status,
                             );
                           } else if (isDailyQuestion) {
                             return _buildDailyQuestionMessage(
@@ -162,6 +185,7 @@ class _ChatPageState extends State<ChatPage> {
                               context,
                               message.content,
                               message.isImage,
+                              message.status,
                             );
                           }
                         },
@@ -196,8 +220,15 @@ class _ChatPageState extends State<ChatPage> {
             right: 15, // Adjust for padding
             child: FloatingActionButton(
               onPressed: () async {
-                if (_isFetching) return; // ✅ Prevent multiple requests
-                setState(() => _isFetching = true); // ✅ Disable button
+                if (_isFetching) {
+                  print("Already fetching AI message, skipping request.");
+                  return; // ✅ Prevent multiple requests
+                }
+
+                setState(
+                  () => _isFetching = true,
+                ); // ✅ Disable button during fetch
+                print("Fetching AI daily question...");
 
                 try {
                   final response = await http.get(
@@ -208,11 +239,24 @@ class _ChatPageState extends State<ChatPage> {
 
                   if (response.statusCode == 200) {
                     final data = json.decode(response.body);
-                    print("AI Response: ${data['question']}");
+                    String aiMessage = data['question'];
+                    print("AI Response: $aiMessage");
 
-                    BlocProvider.of<ChatBloc>(context).add(
-                      SendMessageEvent(widget.conversationId, data['question']),
-                    );
+                    if (aiMessage.isNotEmpty) {
+                      // ✅ Ensure no duplicate AI message is added
+                      final chatState =
+                          BlocProvider.of<ChatBloc>(context).state;
+                      if (chatState is ChatLoadedState &&
+                          chatState.messages.any(
+                            (msg) => msg.content == aiMessage,
+                          )) {
+                        print("Duplicate AI message detected, skipping...");
+                      } else {
+                        BlocProvider.of<ChatBloc>(context).add(
+                          SendMessageEvent(widget.conversationId, aiMessage),
+                        );
+                      }
+                    }
                   } else {
                     print(
                       "Failed to fetch AI message, Status: ${response.statusCode}",
@@ -221,9 +265,7 @@ class _ChatPageState extends State<ChatPage> {
                 } catch (e) {
                   print("Error fetching AI message: $e");
                 } finally {
-                  setState(
-                    () => _isFetching = false,
-                  ); // ✅ Re-enable button after API call
+                  setState(() => _isFetching = false); // ✅ Re-enable button
                 }
               },
 
@@ -243,6 +285,7 @@ class _ChatPageState extends State<ChatPage> {
     BuildContext context,
     String message,
     bool isImage,
+    String status,
   ) {
     return Align(
       alignment: Alignment.centerLeft,
@@ -253,7 +296,9 @@ class _ChatPageState extends State<ChatPage> {
           color: const Color.fromARGB(255, 69, 128, 21),
           borderRadius: BorderRadius.circular(15),
         ),
-        child:
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             isImage
                 ? ClipRRect(
                   borderRadius: BorderRadius.circular(10),
@@ -265,32 +310,90 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 )
                 : Text(message, style: Theme.of(context).textTheme.bodyMedium),
+            SizedBox(height: 3),
+            if (status == 'read')
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.visibility,
+                    size: 14,
+                    color: Colors.blue,
+                  ), // "Seen" icon
+                  SizedBox(width: 3),
+                  Text(
+                    "Seen",
+                    style: TextStyle(color: Colors.blue, fontSize: 12),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSentMessage(BuildContext context, String message, bool isImage) {
+  Widget _buildSentMessage(
+    BuildContext context,
+    String message,
+    bool isImage,
+    String status,
+  ) {
+    Color tickColor = Theme.of(context).primaryColor; // ✅ Use Theme color
+
+    // ✅ Determine which tick to show with theme color
+    Icon tickIcon;
+    if (status == 'sent') {
+      tickIcon = Icon(Icons.check, color: tickColor); // Single tick
+    } else if (status == 'delivered') {
+      tickIcon = Icon(Icons.done_all, color: tickColor); // Double tick
+    } else if (status == 'read') {
+      tickIcon = Icon(
+        Icons.done_all,
+        color: const Color.fromARGB(255, 0, 0, 0),
+      ); // Blue tick remains blue
+    } else {
+      tickIcon = Icon(Icons.access_time, color: AppTheme.darkTheme.scaffoldBackgroundColor); // Pending
+    }
+
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
-        margin: EdgeInsets.only(right: 30, top: 5, bottom: 5),
+        margin: EdgeInsets.only(right: 10, top: 5, bottom: 5, left: 50),
         padding: EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: const Color.fromARGB(255, 114, 140, 212),
+          color: Color.fromARGB(255, 114, 140, 212),
           borderRadius: BorderRadius.circular(15),
         ),
-        child:
-            isImage
-                ? ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.file(
-                    File(message),
-                    width: 200,
-                    height: 200,
-                    fit: BoxFit.cover,
-                  ),
-                )
-                : Text(message, style: Theme.of(context).textTheme.bodyMedium),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Flexible(
+              child:
+                  isImage
+                      ? ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.file(
+                          File(message),
+                          width: 200,
+                          height: 200,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                      : Text(
+                        message,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        softWrap: true,
+                      ),
+            ),
+            SizedBox(width: 5),
+            tickIcon, // ✅ Show tick with theme color
+          ],
+        ),
       ),
     );
   }
