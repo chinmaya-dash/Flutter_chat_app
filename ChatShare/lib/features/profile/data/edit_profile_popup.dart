@@ -45,7 +45,7 @@ class _EditProfilePopupState extends State<EditProfilePopup> {
 
       try {
         final response = await http.put(
-          Uri.parse('http://192.168.222.126:4000/profile/update'), // ✅ Correct API route
+          Uri.parse('http://192.168.33.126:4000/profile/update'), // ✅ Correct API route
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',

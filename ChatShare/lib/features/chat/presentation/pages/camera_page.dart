@@ -29,6 +29,7 @@ class _CameraPageState extends State<CameraPage> {
   void initState() {
     super.initState();
     _openCamera(); // Automatically open camera on page load
+    
   }
 
   @override

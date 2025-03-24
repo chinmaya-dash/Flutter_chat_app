@@ -60,7 +60,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final response = await http.delete(
-        Uri.parse('http://192.168.222.126:4000/profile/delete'),
+        Uri.parse('http://192.168.33.126:4000/profile/delete'),
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -271,7 +271,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final response = await http.put(
-        Uri.parse("http://192.168.222.126:4000/profile/update-profile-image"),
+        Uri.parse("http://192.168.33.126:4000/profile/update-profile-image"),
         body: jsonEncode({"userId": userId, "newImage": newImage}),
         headers: {"Content-Type": "application/json"},
       );

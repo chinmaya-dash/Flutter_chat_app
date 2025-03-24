@@ -31,161 +31,165 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<UpdateMessageStatusEvent>(
       _onUpdateMessageStatus,
     ); // ✅ Correctly registered
+      // ✅ Prevent duplicate listeners when ChatBloc is created
+  _socketService.socket.off('newMessage');
+  _socketService.socket.off('updateMessageStatus');
+
+   // ✅ Listen for real-time messages globally
+  _socketService.socket.on('newMessage', (data) {
+    print("📩 New message received: $data");
+    add(ReceiveMessageEvent(data));
+  });
+
+
+  _socketService.socket.on('updateMessageStatus', (data) {
+    add(UpdateMessageStatusEvent(data['messageId'], data['status']));
+  });
+
   }
 
   // ✅ Load messages and mark unread as "read"
-  Future<void> _onLoadMessages(
-    LoadMessagesEvent event,
-    Emitter<ChatState> emit,
-  ) async {
-    emit(ChatLoadingState());
+Future<void> _onLoadMessages(LoadMessagesEvent event, Emitter<ChatState> emit) async {
+  if (_currentConversationId != event.conversationId) {
+    _messages.clear(); // ✅ Clear only when switching conversations
+  }
 
-    try {
-      _currentConversationId =
-          event.conversationId; // ✅ Update active conversation ID
-      final messages = await fetchMessagesUseCase(event.conversationId);
+  try {
+    _currentConversationId = event.conversationId;
+    final messages = await fetchMessagesUseCase(event.conversationId);
 
-      // ✅ Mark delivered messages as "read"
-      for (var message in messages) {
-        if (message.status == 'delivered') {
-          _socketService.socket.emit('updateMessageStatus', {
-            'messageId': message.id,
-            'status': 'read',
-            'conversationId': event.conversationId,
-          });
-        }
+    for (var message in messages) {
+      if (message.status == 'delivered') {
+        _socketService.socket.emit('updateMessageStatus', {
+          'messageId': message.id,
+          'status': 'read',
+          'conversationId': event.conversationId,
+        });
       }
+    }
 
+    // ✅ Instead of _messages = messages (which causes an error), use .clear() and .addAll()
+    if (_messages.isEmpty || messages.length > _messages.length) {
       _messages.clear();
       _messages.addAll(messages);
-      print("✅ Messages fetched: ${_messages.length}");
-
-      emit(ChatLoadedState(List.from(_messages)));
-
-      // ✅ Prevent duplicate listeners
-      _socketService.socket.off('newMessage');
-      _socketService.socket.off('updateMessageStatus');
-
-      // ✅ Listen for real-time messages
-      _socketService.socket.on('newMessage', (data) {
-        print("📩 New message received: $data");
-        add(ReceiveMessageEvent(data));
-      });
-
-      // ✅ Listen for status updates
-      _socketService.socket.on('updateMessageStatus', (data) {
-        add(UpdateMessageStatusEvent(data['messageId'], data['status']));
-      });
-    } catch (error) {
-      emit(ChatErrorState('❌ Failed to load messages'));
+      emit(ChatLoadedState(List.from(_messages))); 
     }
+
+    print("✅ Messages fetched: ${_messages.length}");
+  } catch (error) {
+    print("❌ Error loading messages: $error");
+    emit(ChatErrorState('Failed to load messages'));
   }
+
+  // ✅ Ensure socket listeners are added only once
+  _socketService.socket.off('newMessage');
+  _socketService.socket.off('updateMessageStatus');
+
+  _socketService.socket.on('newMessage', (data) {
+    print("📩 New message received: $data");
+    add(ReceiveMessageEvent(data));
+  });
+
+  _socketService.socket.on('updateMessageStatus', (data) {
+    add(UpdateMessageStatusEvent(data['messageId'], data['status']));
+  });
+}
+
 
   // ✅ Handle updating message status
-  void _onUpdateMessageStatus(
-    UpdateMessageStatusEvent event,
-    Emitter<ChatState> emit,
-  ) {
-    int index = _messages.indexWhere((msg) => msg.id == event.messageId);
-
-    if (index != -1) {
-      // ✅ Use `copyWith` to create an updated message
-      _messages[index] = _messages[index].copyWith(status: event.status);
-
-      emit(ChatLoadedState(List.from(_messages))); // ✅ Force UI update
-    }
+void _onUpdateMessageStatus(
+  UpdateMessageStatusEvent event,
+  Emitter<ChatState> emit,
+) {
+  int index = _messages.indexWhere((msg) => msg.id == event.messageId);
+  if (index != -1) {
+    _messages[index] = _messages[index].copyWith(status: event.status);
+    
+    // ✅ Ensure UI updates
+    emit(ChatLoadedState(List.from(_messages))); 
   }
+}
+
+
 
   // ✅ Handle sending messages
-  Future<void> _onSendMessage(
-    SendMessageEvent event,
-    Emitter<ChatState> emit,
-  ) async {
-    String userId = await _storage.read(key: 'userId') ?? '';
-    print('userId : $userId');
+  Future<void> _onSendMessage(SendMessageEvent event, Emitter<ChatState> emit) async {
+  String userId = await _storage.read(key: 'userId') ?? '';
+  print('userId : $userId');
 
-    final tempMessage = MessageEntity(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      conversationId: event.conversationId,
-      senderId: userId,
-      content: event.content,
-      createdAt: DateTime.now().toIso8601String(),
-      isImage: event.isImage,
-      status: 'sending', // 🔴 Initially marked as "sending"
-    );
+  // ✅ Create a temporary message with "sending" status
+  final tempMessage = MessageEntity(
+    id: DateTime.now().millisecondsSinceEpoch.toString(), // Temporary ID
+    conversationId: event.conversationId,
+    senderId: userId,
+    content: event.content,
+    createdAt: DateTime.now().toIso8601String(),
+    isImage: event.isImage,
+    status: 'sending', // 🔴 Initially marked as "sending"
+  );
 
-    _messages.add(tempMessage);
-    emit(ChatLoadedState(List.from(_messages)));
+  // ✅ Add the message to the chat immediately
+  _messages.add(tempMessage);
+  emit(ChatLoadedState(List.from(_messages))); // ✅ UI updates immediately
 
-    final newMessage = {
-      'conversationId': event.conversationId,
-      'content': event.content,
-      'senderId': userId,
-    };
+  // ✅ Send message to the server
+  final newMessage = {
+    'conversationId': event.conversationId,
+    'content': event.content,
+    'senderId': userId,
+  };
 
-    _socketService.socket.emit('sendMessage', newMessage);
+  _socketService.socket.emit('sendMessage', newMessage);
 
-    // ✅ Remove existing listener to prevent duplicate events
-    _socketService.socket.off('messageSent');
+  // ✅ Restore "messageSent" listener
+  _socketService.socket.on('messageSent', (data) {
+    print("🟢 Server response: $data");
 
-    _socketService.socket.on('messageSent', (data) {
-      print("🟢 Server response: $data");
+    if (data != null && data['id'] != null) {
+      // ✅ Find the message and update its ID and status
+      int index = _messages.indexWhere((msg) => msg.id == tempMessage.id);
+      if (index != -1) {
+        _messages[index] = _messages[index].copyWith(
+          id: data['id'], // ✅ Replace temp ID with real ID
+          status: 'sent', // ✅ Immediately mark as "sent"
+        );
 
-      if (data != null && data['id'] != null) {
-        int index = _messages.indexWhere((msg) => msg.id == tempMessage.id);
-        if (index != -1) {
-          _messages[index] = _messages[index].copyWith(
-            id: data['id'], // ✅ Replace temp ID with real ID
-            status: 'sent', // ✅ Update status to "sent"
-          );
-          emit(ChatLoadedState(List.from(_messages)));
-        }
+        emit(ChatLoadedState(List.from(_messages))); // ✅ Force UI update
       }
-    });
-  }
+    }
+  });
+}
+
 
   // ✅ Handle receiving messages
-  Future<void> _onReceiveMessage(
-    ReceiveMessageEvent event,
-    Emitter<ChatState> emit,
-  ) async {
-    print("📩 New message event received");
-    print(event.message);
+Future<void> _onReceiveMessage(ReceiveMessageEvent event, Emitter<ChatState> emit) async {
+  print("📩 New message event received");
+  print(event.message);
 
-    final newMessage = MessageEntity(
-      id: event.message['id'],
-      conversationId: event.message['conversation_id'],
-      senderId: event.message['sender_id'],
-      content: event.message['content'],
-      createdAt: event.message['created_at'],
-      isImage: event.message['is_image'] ?? false,
-      status: 'delivered',
-    );
+  final newMessage = MessageEntity(
+    id: event.message['id'],
+    conversationId: event.message['conversation_id'],
+    senderId: event.message['sender_id'],
+    content: event.message['content'],
+    createdAt: event.message['created_at'],
+    isImage: event.message['is_image'] ?? false,
+    status: event.message['status'] ?? 'delivered',
+  );
 
-    int index = _messages.indexWhere(
-      (msg) =>
-          msg.senderId == newMessage.senderId &&
-          msg.conversationId == newMessage.conversationId &&
-          msg.content == newMessage.content,
-    );
-
-    if (index != -1) {
-      _messages[index] = _messages[index].copyWith(
-        id: newMessage.id,
-        status: 'delivered',
-      );
-    } else {
-      _messages.add(newMessage);
-    }
-
-    emit(ChatLoadedState(List.from(_messages)));
-
-    _socketService.socket.emit('updateMessageStatus', {
-      'messageId': event.message['id'],
-      'status': 'delivered',
-      'conversationId': _currentConversationId,
-    });
+  // ✅ Ensure message is not duplicated
+  if (!_messages.any((msg) => msg.id == newMessage.id)) {
+    _messages.add(newMessage);
   }
+
+  emit(ChatLoadedState(List.from(_messages)));
+}
+
+
+
+
+
+
+
 
   // ✅ Handle loading daily question
   Future<void> _onLoadDailyQuestionEvent(

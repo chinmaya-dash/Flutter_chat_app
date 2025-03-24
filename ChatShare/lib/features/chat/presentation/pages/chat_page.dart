@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -41,24 +42,76 @@ class _ChatPageState extends State<ChatPage> {
   bool _showEmojiPicker = false;
   String userId = '';
   String botId = '00000000-0000-0000-0000-000000000000';
+  Timer? _messageRefreshTimer;
+// ✅ Declare a timer variable
 
-  @override
-  void initState() {
-    super.initState();
-    BlocProvider.of<ChatBloc>(
-      context,
-    ).add(LoadMessagesEvent(widget.conversationId));
-    // BlocProvider.of<ChatBloc>(context,).add(LoadDailyQuestionEvent(widget.conversationId));
-    fetchUserId();
-    markMessagesAsRead(widget.conversationId, widget.currentUserId);
-  }
+Future<void> fetchUserId() async {
+  final storedUserId = await _storage.read(key: 'userId') ?? '';
+  setState(() {
+    userId = storedUserId;
+  });
+}
+@override
+void initState() {
+  super.initState();
 
-  fetchUserId() async {
-    userId = await _storage.read(key: 'userId') ?? '';
-    setState(() {
-      userId = userId;
-    });
-  }
+
+  fetchUserId().then((_) {
+    _fetchMessages(); // ✅ Fetch messages after getting userId
+  });  
+  // ✅ Start a timer to refresh only if messages are in "sending" state
+  // _messageRefreshTimer = Timer.periodic(Duration(seconds: 2), (timer) {
+  //   if (!mounted) {
+  //     timer.cancel();
+  //     return;
+  //   }
+
+
+
+
+  //   final chatState = BlocProvider.of<ChatBloc>(context).state;
+  //   if (chatState is ChatLoadedState && chatState.messages.any((msg) => msg.status == 'sending')) {
+  //     BlocProvider.of<ChatBloc>(context).add(LoadMessagesEvent(widget.conversationId));
+  //   }
+  // });
+}
+
+@override
+void dispose() {
+  _messageRefreshTimer?.cancel(); // ✅ Properly cancel the timer when leaving the chat page
+  super.dispose();
+}
+
+void _fetchMessages() {
+  BlocProvider.of<ChatBloc>(context).add(LoadMessagesEvent(widget.conversationId));
+}
+
+
+   // ✅ Fetch latest messages (triggers every second)
+// void _fetchMessages() {
+//   final previousState = BlocProvider.of<ChatBloc>(context).state;
+
+//   if (previousState is ChatLoadedState) {
+//     final previousMessageCount = previousState.messages.length;
+
+//     BlocProvider.of<ChatBloc>(context).add(LoadMessagesEvent(widget.conversationId));
+
+//     Future.delayed(Duration(milliseconds: 200), () {
+//       final currentState = BlocProvider.of<ChatBloc>(context).state;
+
+//       if (currentState is ChatLoadedState) {
+//         final currentMessageCount = currentState.messages.length;
+
+//         // ✅ Scroll only when new messages are added
+//         if (currentMessageCount > previousMessageCount) {
+//           _scrollToBottom();
+//         }
+//       }
+//     });
+//   }
+// }
+
+
 
   Future<void> _openCamera() async {
     final picker = ImagePicker();
@@ -75,10 +128,9 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   //message seen
-  Future<void> markMessagesAsRead(String conversationId, String userId) async {
-    final url = Uri.parse(
-      'http://localhost:4000/conversations/messages/mark-as-read',
-    );
+Future<void> markMessagesAsRead(String conversationId, String userId) async {
+  try {
+    final url = Uri.parse('http://192.268.33.126:4000/conversations/messages/mark-as-read');
 
     final response = await http.post(
       url,
@@ -87,17 +139,23 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     if (response.statusCode == 200) {
-      print("Messages marked as read");
+      print("✅ Messages marked as read");
     } else {
-      print("Failed to update message status");
+      print("❌ Failed to update message status: ${response.body}");
     }
+  } catch (e) {
+    print("⚠️ Error marking messages as read: $e");
   }
+}
 
-  @override
-  void dispose() {
-    _messageController.dispose();
-    super.dispose();
-  }
+
+  // @override
+  // void dispose() {
+  //   _messageController.dispose();
+  //       // _messageRefreshTimer?.cancel(); // ✅ Stop timer when exiting page
+  //         _messageRefreshTimer?.cancel();
+  //   super.dispose();
+  // }
 
   void _sendMessage({bool isImage = false, String? imageUrl}) {
     final content = isImage ? imageUrl! : _messageController.text.trim();
@@ -258,7 +316,7 @@ class _ChatPageState extends State<ChatPage> {
                 try {
                   final response = await http.get(
                     Uri.parse(
-                      'http://192.168.222.126:4000/conversations/${widget.conversationId}/daily-question',
+                      'http://192.168.33.126:4000/conversations/${widget.conversationId}/daily-question',
                     ),
                   );
 
